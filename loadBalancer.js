@@ -57,13 +57,28 @@ function getNextServer() {
   return server;
 }
 
-function getNextServer() {
+async function getNextServer() {
   const healthyServers = allServers.filter((server) => server.isHealthy);
   if (healthyServers.length === 0) return null;
 
-  const server = healthyServers[currentServerIndex % healthyServers.length];
+  let server = healthyServers[currentServerIndex % healthyServers.length];
   currentServerIndex = (currentServerIndex + 1) % healthyServers.length;
-  return server.host;
+
+  // Check server health just before proxying the request
+  try {
+    const response = await axios.get(server.host + "/");
+    if (response.status === 200) {
+      return server.host;
+    } else {
+      server.isHealthy = false;
+      console.log(`Server ${server.host} became unhealthy`);
+      return getNextServer(); // Recursively get the next healthy server
+    }
+  } catch (error) {
+    server.isHealthy = false;
+    console.log(`Server ${server.host} became unhealthy`);
+    return getNextServer(); // Recursively get the next healthy server
+  }
 }
 
 app.use(async (req, res) => {

@@ -56,15 +56,15 @@ async function getNextServer(req) {
 
   // Custom routing based on request headers
   const apiTypeHeader = req.headers["x-api-type"];
-  if (apiTypeHeader) {
-    const server = healthyServers.find((server) => {
-      return server.host.includes(apiTypeHeader.toLowerCase());
-    });
-    if (server) {
+  if (apiTypeHeader && apiTypeHeader.toLowerCase() === "rest") {
+    const server1 = healthyServers.find((server) =>
+      server.host.includes(FIRST_SERVER_PORT)
+    );
+    if (server1) {
       console.log(
-        `Selected server based on header ${apiTypeHeader}: ${server.host}`
+        `Selected server based on header ${apiTypeHeader}: ${server1.host}`
       );
-      return server.host;
+      return server1.host;
     }
   }
 

@@ -3,6 +3,9 @@ const axios = require("axios");
 
 const app = express();
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 const PORT = 4002;
 
 app.get("/", (req, res) => {

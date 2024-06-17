@@ -1,12 +1,14 @@
 const express = require("express");
-const axios = require("axios");
 
 const app = express();
 
 const PORT = 4001;
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.get("/", (req, res) => {
-  setTimeout(() => res.send("Fast response from server 1"), 100);
+  res.send("Fast response from server 1");
 });
 
 app.listen(PORT, () => {

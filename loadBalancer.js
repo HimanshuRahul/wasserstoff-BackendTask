@@ -8,6 +8,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = 5000;
+
 const FIRST_SERVER_PORT = 4001;
 const SECOND_SERVER_PORT = 4002;
 
@@ -49,48 +50,67 @@ setInterval(() => {
     });
 }, 10000);
 
-function getNextServer() {
-  if (healthyServers.length === 0) return null;
-
-  const server = healthyServers[currentServer % healthyServers.length];
-  currentServer = (currentServer + 1) % healthyServers.length;
-  return server;
-}
-
-async function getNextServer() {
+async function getNextServer(req) {
   const healthyServers = allServers.filter((server) => server.isHealthy);
   if (healthyServers.length === 0) return null;
 
+  // Custom routing based on request headers
+  const apiTypeHeader = req.headers["x-api-type"];
+  if (apiTypeHeader) {
+    const server = healthyServers.find((server) => {
+      return server.host.includes(apiTypeHeader.toLowerCase());
+    });
+    if (server) {
+      console.log(
+        `Selected server based on header ${apiTypeHeader}: ${server.host}`
+      );
+      return server.host;
+    }
+  }
+
+  // Default round-robin routing
   let server = healthyServers[currentServerIndex % healthyServers.length];
   currentServerIndex = (currentServerIndex + 1) % healthyServers.length;
-
-  // Check server health just before proxying the request
-  try {
-    const response = await axios.get(server.host + "/");
-    if (response.status === 200) {
-      return server.host;
-    } else {
-      server.isHealthy = false;
-      console.log(`Server ${server.host} became unhealthy`);
-      return getNextServer(); // Recursively get the next healthy server
-    }
-  } catch (error) {
-    server.isHealthy = false;
-    console.log(`Server ${server.host} became unhealthy`);
-    return getNextServer(); // Recursively get the next healthy server
-  }
+  console.log(`Selected server using round-robin: ${server.host}`);
+  return server.host;
 }
 
 app.use(async (req, res) => {
-  const target = await getNextServer();
+  console.log(`Received request: ${req.method} ${req.url}`);
+  console.log(`Request headers: ${JSON.stringify(req.headers)}`);
+  console.log(`Request body: ${JSON.stringify(req.body)}`);
+
+  const target = await getNextServer(req);
 
   if (target) {
-    proxy.web(req, res, { target });
+    console.log(`Proxying request to: ${target}`);
+    proxy.web(req, res, { target }, (err) => {
+      if (err) {
+        console.error(`Error proxying request: ${err}`);
+        res.status(500).send("Error proxying request");
+      }
+    });
+
+    proxy.once("proxyRes", (proxyRes) => {
+      let body = "";
+      proxyRes.on("data", (chunk) => {
+        body += chunk;
+      });
+      proxyRes.on("end", () => {
+        console.log(`Response from target server: ${body}`);
+      });
+    });
   } else {
+    console.log("No healthy backends available to handle the request.");
     res
       .status(502)
       .send("No healthy backends available to handle the request.");
   }
+});
+
+proxy.on("error", (err, req, res) => {
+  console.error("Proxy error:", err);
+  res.status(500).send("Proxy error occurred.");
 });
 
 app.listen(PORT, () => {

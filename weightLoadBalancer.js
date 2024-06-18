@@ -1,6 +1,7 @@
 const express = require("express");
 const httpProxy = require("http-proxy");
 const axios = require("axios");
+const winston = require("winston");
 
 const app = express();
 const proxy = httpProxy.createProxyServer({});
@@ -22,6 +23,18 @@ const servers = [
     currentWeight: 0,
   },
 ];
+
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: "weightLoadBalancer.log" }),
+  ],
+});
 
 async function checkServerHealth(server) {
   try {
@@ -60,7 +73,7 @@ function getNextServer() {
 
   if (bestServer) {
     bestServer.currentWeight -= totalWeight;
-    console.log(
+    logger.info(
       `Selected server: ${bestServer.host} with current weight: ${bestServer.currentWeight}`
     );
   }
@@ -70,6 +83,7 @@ function getNextServer() {
 
 app.use((req, res) => {
   const targetServer = getNextServer();
+  const start = Date.now();
 
   if (!targetServer) {
     res
@@ -78,10 +92,10 @@ app.use((req, res) => {
     return;
   }
 
-  console.log(`Proxying request to: ${targetServer.host}`);
+  logger.info(`Proxying request to: ${targetServer.host}`);
   proxy.web(req, res, { target: targetServer.host }, (err) => {
     if (err) {
-      console.error(`Error proxying request: ${err}`);
+      logger.error(`Error proxying request: ${err}`);
       res.status(500).send("Error proxying request");
     }
   });
@@ -92,16 +106,19 @@ app.use((req, res) => {
       body += chunk;
     });
     proxyRes.on("end", () => {
-      console.log(`Response from target server: ${body}`);
+      const duration = Date.now() - start;
+      logger.info(`Response from target server: ${body}`, {
+        duration: `${duration}ms`,
+      });
     });
   });
 });
 
 proxy.on("error", (err, req, res) => {
-  console.error("Proxy error:", err);
+  logger.error("Proxy error:", err);
   res.status(500).send("Proxy error occurred.");
 });
 
 app.listen(PORT, () => {
-  console.log(`Weight-based round robin load balancer started on port ${PORT}`);
+  logger.info(`Weight-based round robin load balancer started on port ${PORT}`);
 });

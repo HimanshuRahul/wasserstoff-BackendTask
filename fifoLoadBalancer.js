@@ -1,6 +1,7 @@
 const express = require("express");
 const httpProxy = require("http-proxy");
 const axios = require("axios");
+const winston = require("winston");
 
 const app = express();
 
@@ -21,6 +22,18 @@ const requestQueue = [];
 const proxy = httpProxy.createProxyServer({});
 
 let currentServerIndex = 0;
+
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: "fifoLoadBalancer.log" }),
+  ],
+});
 
 async function checkServerHealth(server) {
   try {
@@ -47,7 +60,7 @@ setInterval(() => {
       console.log("Health check performed");
     })
     .catch((err) => {
-      console.error("Health check failed", err);
+      logger.error("Health check failed", err);
     });
 }, 10000);
 
@@ -74,11 +87,12 @@ async function processQueue() {
     const req = reqRes.req;
     const res = reqRes.res;
 
-    console.log(`Proxying request to: ${target}`);
+    logger.info(`Proxying request to: ${target}`);
+    const start = Date.now();
 
     proxy.web(req, res, { target }, (err) => {
       if (err) {
-        console.error(`Error proxying request: ${err}`);
+        logger.error(`Error proxying request: ${err}`);
         res.status(500).send("Error proxying request");
       }
     });
@@ -89,7 +103,10 @@ async function processQueue() {
         body += chunk;
       });
       proxyRes.on("end", () => {
-        console.log(`Response from target server: ${body}`);
+        const duration = Date.now() - start;
+        logger.info(`Response from target server: ${body}`, {
+          duration: `${duration}ms`,
+        });
       });
     });
   }
@@ -101,10 +118,10 @@ app.use((req, res) => {
 });
 
 proxy.on("error", (err, req, res) => {
-  console.error("Proxy error:", err);
+  logger.error("Proxy error:", err);
   res.status(500).send("Proxy error occurred.");
 });
 
 app.listen(PORT, () => {
-  console.log(`FIFO load balancer started on port ${PORT}`);
+  logger.info(`FIFO load balancer started on port ${PORT}`);
 });

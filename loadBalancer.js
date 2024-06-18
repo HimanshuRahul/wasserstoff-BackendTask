@@ -1,12 +1,10 @@
 const express = require("express");
 const httpProxy = require("http-proxy");
 const axios = require("axios");
+const winston = require("winston");
 
 const app = express();
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
+const proxy = httpProxy.createProxyServer({});
 const PORT = 5000;
 
 const FIRST_SERVER_PORT = 4001;
@@ -19,7 +17,17 @@ const allServers = [
 
 let currentServerIndex = 0;
 
-const proxy = httpProxy.createProxyServer({});
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: "loadBalancer.log" }),
+  ],
+});
 
 async function checkServerHealth(server) {
   try {
@@ -46,7 +54,7 @@ setInterval(() => {
       console.log("Health check performed");
     })
     .catch((err) => {
-      console.error("Health check failed", err);
+      logger.error("Health check failed", err);
     });
 }, 10000);
 
@@ -54,39 +62,39 @@ async function getNextServer(req) {
   const healthyServers = allServers.filter((server) => server.isHealthy);
   if (healthyServers.length === 0) return null;
 
-  // Custom routing based on request headers
   const apiTypeHeader = req.headers["x-api-type"];
   if (apiTypeHeader && apiTypeHeader.toLowerCase() === "rest") {
     const server1 = healthyServers.find((server) =>
       server.host.includes(FIRST_SERVER_PORT)
     );
     if (server1) {
-      console.log(
+      logger.info(
         `Selected server based on header ${apiTypeHeader}: ${server1.host}`
       );
       return server1.host;
     }
   }
 
-  // Default round-robin routing
   let server = healthyServers[currentServerIndex % healthyServers.length];
   currentServerIndex = (currentServerIndex + 1) % healthyServers.length;
-  console.log(`Selected server using round-robin: ${server.host}`);
+  logger.info(`Selected server using round-robin: ${server.host}`);
   return server.host;
 }
 
 app.use(async (req, res) => {
-  console.log(`Received request: ${req.method} ${req.url}`);
-  console.log(`Request headers: ${JSON.stringify(req.headers)}`);
-  console.log(`Request body: ${JSON.stringify(req.body)}`);
+  const start = Date.now();
+  logger.info(`Received request: ${req.method} ${req.url}`, {
+    headers: req.headers,
+    body: req.body,
+  });
 
   const target = await getNextServer(req);
 
   if (target) {
-    console.log(`Proxying request to: ${target}`);
+    logger.info(`Proxying request to: ${target}`);
     proxy.web(req, res, { target }, (err) => {
       if (err) {
-        console.error(`Error proxying request: ${err}`);
+        logger.error(`Error proxying request: ${err}`);
         res.status(500).send("Error proxying request");
       }
     });
@@ -97,11 +105,14 @@ app.use(async (req, res) => {
         body += chunk;
       });
       proxyRes.on("end", () => {
-        console.log(`Response from target server: ${body}`);
+        const duration = Date.now() - start;
+        logger.info(`Response from target server: ${body}`, {
+          duration: `${duration}ms`,
+        });
       });
     });
   } else {
-    console.log("No healthy backends available to handle the request.");
+    logger.warn("No healthy backends available to handle the request.");
     res
       .status(502)
       .send("No healthy backends available to handle the request.");
@@ -109,10 +120,10 @@ app.use(async (req, res) => {
 });
 
 proxy.on("error", (err, req, res) => {
-  console.error("Proxy error:", err);
+  logger.error("Proxy error:", err);
   res.status(500).send("Proxy error occurred.");
 });
 
 app.listen(PORT, () => {
-  console.log(`Load balancer started on port ${PORT}`);
+  logger.info(`Load balancer started on port ${PORT}`);
 });

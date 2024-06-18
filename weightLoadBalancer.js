@@ -4,7 +4,7 @@ const axios = require("axios");
 
 const app = express();
 const proxy = httpProxy.createProxyServer({});
-const PORT = 5003;
+const PORT = 5002;
 const FIRST_SERVER_PORT = 4001;
 const SECOND_SERVER_PORT = 4002;
 

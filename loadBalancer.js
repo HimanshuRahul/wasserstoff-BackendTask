@@ -2,13 +2,21 @@ const express = require("express");
 const httpProxy = require("http-proxy");
 const axios = require("axios");
 const winston = require("winston");
+const rateLimit = require("express-rate-limit");
 
 const app = express();
+const limiter = rateLimit({
+  windowMs: 2 * 60 * 1000, // 2 minutes
+  limit: 10, // Limit each IP to 10 requests per `window` (here, per 2 minutes).
+});
+
 const proxy = httpProxy.createProxyServer({});
 const PORT = 5000;
 
 const FIRST_SERVER_PORT = 4001;
 const SECOND_SERVER_PORT = 4002;
+
+app.use(limiter);
 
 const allServers = [
   { host: `http://localhost:${FIRST_SERVER_PORT}`, isHealthy: true },

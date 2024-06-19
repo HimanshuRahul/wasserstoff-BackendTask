@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "concurrently \"node loadBalancers/loadBalancer.js\" \"node loadBalancers/fifoLoadBalancer.js\" \"node loadBalancers/weightLoadBalancer.js\" \"node servers/server1.js\" \"node servers/server2.js\"",
+    "start": "concurrently \"node servers/server1.js\" \"node servers/server2.js\" \"node index.js\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -16,6 +16,7 @@
     "express": "^4.19.2",
     "express-rate-limit": "^7.3.1",
     "http-proxy": "^1.18.1",
+    "http-proxy-middleware": "^3.0.0",
     "winston": "^3.13.0"
   }
 }

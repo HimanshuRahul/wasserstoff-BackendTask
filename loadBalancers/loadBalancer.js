@@ -4,19 +4,17 @@ const axios = require("axios");
 const winston = require("winston");
 const rateLimit = require("express-rate-limit");
 
-const app = express();
+const router = express.Router();
 const limiter = rateLimit({
   windowMs: 2 * 60 * 1000, // 2 minutes
   limit: 10, // Limit each IP to 10 requests per `window` (here, per 2 minutes).
 });
 
 const proxy = httpProxy.createProxyServer({});
-const PORT = 5000;
-
 const FIRST_SERVER_PORT = 4001;
 const SECOND_SERVER_PORT = 4002;
 
-app.use(limiter);
+router.use(limiter);
 
 const allServers = [
   { host: `http://localhost:${FIRST_SERVER_PORT}`, isHealthy: true },
@@ -89,7 +87,7 @@ async function getNextServer(req) {
   return server.host;
 }
 
-app.use(async (req, res) => {
+router.use(async (req, res) => {
   const start = Date.now();
   logger.info(`Received request: ${req.method} ${req.url}`, {
     headers: req.headers,
@@ -132,6 +130,4 @@ proxy.on("error", (err, req, res) => {
   res.status(500).send("Proxy error occurred.");
 });
 
-app.listen(PORT, () => {
-  logger.info(`Load balancer started on port ${PORT}`);
-});
+module.exports = router;

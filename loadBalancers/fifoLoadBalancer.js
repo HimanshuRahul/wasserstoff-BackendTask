@@ -4,22 +4,18 @@ const axios = require("axios");
 const winston = require("winston");
 const rateLimit = require("express-rate-limit");
 
-const app = express();
+const router = express.Router();
 
 const limiter = rateLimit({
   windowMs: 2 * 60 * 1000, // 2 minutes
   limit: 10, // Limit each IP to 10 requests per `window` (here, per 2 minutes).
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use(limiter);
-
-const PORT = 5001;
-
+const proxy = httpProxy.createProxyServer({});
 const FIRST_SERVER_PORT = 4001;
 const SECOND_SERVER_PORT = 4002;
+
+router.use(limiter);
 
 const allServers = [
   { host: `http://localhost:${FIRST_SERVER_PORT}`, isHealthy: true },
@@ -27,8 +23,6 @@ const allServers = [
 ];
 
 const requestQueue = [];
-const proxy = httpProxy.createProxyServer({});
-
 let currentServerIndex = 0;
 
 const logger = winston.createLogger({
@@ -120,7 +114,7 @@ async function processQueue() {
   }
 }
 
-app.use((req, res) => {
+router.use((req, res) => {
   requestQueue.push({ req, res });
   processQueue();
 });
@@ -130,6 +124,4 @@ proxy.on("error", (err, req, res) => {
   res.status(500).send("Proxy error occurred.");
 });
 
-app.listen(PORT, () => {
-  logger.info(`FIFO load balancer started on port ${PORT}`);
-});
+module.exports = router;

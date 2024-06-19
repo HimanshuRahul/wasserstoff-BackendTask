@@ -11,6 +11,10 @@ app.get("/", (req, res) => {
   res.send("Fast response from server 1");
 });
 
-app.listen(PORT, () => {
-  console.log(`Server started on PORT ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server started on PORT ${PORT}`);
+  });
+}
+
+module.exports = app;

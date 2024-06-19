@@ -32,7 +32,7 @@ git clone https://github.com/HimanshuRahul/wasserstoff-BackendTask
 ```
 
 ```
-cd load-balancer-project
+cd wasserstoff-BackendTask
 ```
 
 ### Install the dependencies:
